@@ -22,14 +22,57 @@ export const createStudent = async (req, res) => {
  *   get:
  *     summary: Get all students
  *     tags: [Students]
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema: { type: integer, default: 1 }
+ *         description: Page number
+ *       - in: query
+ *         name: limit
+ *         schema: { type: integer, default: 10 }
+ *         description: Number of items per page
+ *       - in: query
+ *         name: sort
+ *         schema: { type: string, enum: [asc, desc], default: asc }
+ *         description: Sort order based on creation time
+ *       - in: query
+ *         name: populate
+ *         schema:
+ *           type: string
+ *         description: Comma-separated related models to include (e.g., Course)
  *     responses:
  *       200:
  *         description: List of students
  */
 export const getAllStudents = async (req, res) => {
+    const limit = parseInt(req.query.limit) || 10;
+    const page = parseInt(req.query.page) || 1;
+
+    const sortBy = req.query.sortBy || "id";
+    const sortOrder = req.query.sort === "desc" ? "DESC" : "ASC";
+    const populate = (req.query.populate || "").split(",");
+
+    const include = [];
+    if (populate.includes("Course")) include.push(db.Course);
+    if (populate.includes("Teacher")) include.push(db.Teacher);
+
     try {
-        const students = await db.Student.findAll({ include: db.Course });
-        res.json(students);
+        const total = await db.Student.count();
+        const students = await db.Student.findAll({
+            limit,
+            offset: (page - 1) * limit,
+            order: [[sortBy, sortOrder]],
+            include,
+        });
+
+        res.json({
+            meta: {
+                totalItems: total,
+                page: page,
+                totalPages: Math.ceil(total / limit),
+            },
+            data: students,
+        });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
